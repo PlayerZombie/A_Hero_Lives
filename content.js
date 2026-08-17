@@ -3,6 +3,9 @@
   let isDragging = false;
   let dragOffset = { x: 0, y: 0 };
   let isMinimized = false;
+  let settings = {
+    defaultMinimized: true
+  };
 
   function createWidget() {
     const widget = document.createElement('div');
@@ -25,6 +28,15 @@
           <button class="btn btn-copy" id="copy-btn">📋 复制全部</button>
           <button class="btn btn-clear" id="clear-btn">🗑️ 清空</button>
         </div>
+        <div id="settings-section">
+          <label class="settings-toggle">
+            <span class="settings-label">默认缩小</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="default-minimized-toggle">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+        </div>
         <div id="image-preview"></div>
       </div>
     `;
@@ -32,6 +44,9 @@
     document.body.appendChild(widget);
     
     setupEventListeners();
+    loadSettings().then(() => {
+      applyDefaultMinimized();
+    }).catch(err => console.error('应用设置失败:', err));
     loadImages().catch(err => console.error('初始化失败:', err));
   }
 
@@ -56,6 +71,9 @@
     copyBtn.addEventListener('click', copyAllImages);
     clearBtn.addEventListener('click', clearImages);
     minimizeBtn.addEventListener('click', toggleMinimize);
+
+    const defaultMinimizedToggle = document.getElementById('default-minimized-toggle');
+    defaultMinimizedToggle.addEventListener('change', handleDefaultMinimizedChange);
   }
 
   function startDrag(e) {
@@ -542,6 +560,58 @@
       widget.classList.add('minimized');
       minimizeBtn.textContent = '+';
     } else {
+      widget.classList.remove('minimized');
+      minimizeBtn.textContent = '−';
+    }
+  }
+
+  function handleDefaultMinimizedChange(e) {
+    settings.defaultMinimized = e.target.checked;
+    saveSettings();
+  }
+
+  function saveSettings() {
+    try {
+      chrome.storage.local.set({ pictureCollectorSettings: settings });
+    } catch (e) {
+      console.error('保存设置失败:', e);
+    }
+  }
+
+  async function loadSettings() {
+    try {
+      const result = await new Promise((resolve, reject) => {
+        chrome.storage.local.get('pictureCollectorSettings', (data) => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(data);
+          }
+        });
+      });
+      
+      const saved = result.pictureCollectorSettings;
+      if (saved && typeof saved.defaultMinimized === 'boolean') {
+        settings.defaultMinimized = saved.defaultMinimized;
+      }
+    } catch (e) {
+      console.error('加载设置失败:', e);
+    }
+  }
+
+  function applyDefaultMinimized() {
+    const widget = document.getElementById('picture-collector');
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const defaultMinimizedToggle = document.getElementById('default-minimized-toggle');
+
+    defaultMinimizedToggle.checked = settings.defaultMinimized;
+
+    if (settings.defaultMinimized) {
+      isMinimized = true;
+      widget.classList.add('minimized');
+      minimizeBtn.textContent = '+';
+    } else {
+      isMinimized = false;
       widget.classList.remove('minimized');
       minimizeBtn.textContent = '−';
     }
