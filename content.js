@@ -10,7 +10,7 @@
     
     widget.innerHTML = `
       <div id="picture-collector-header">
-        <h3>📷 图片收集器</h3>
+        <h3>📷 英雄到来模拟器</h3>
         <button class="btn-minimize" id="minimize-btn">−</button>
       </div>
       <div id="picture-collector-body">
