@@ -1,6 +1,6 @@
 # A_Hero_Lives
 
-![A Hero Lives](A_Hero_Lives.webp)
+![A Hero Lives](A_Hero_Lives.webp)  
 超级群聊真理部  
 请遵守以下下爱群服务公告。  
 注意力不集中将被视为叛群。  
