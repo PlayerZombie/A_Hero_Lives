@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "英雄到来模拟器",
+  "version": "1.0",
+  "description": "可以一次收集多个涩图，一次发出去，成为群里的英雄",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "clipboardWrite",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ]
+}
