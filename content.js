@@ -3,6 +3,13 @@
   let isDragging = false;
   let dragOffset = { x: 0, y: 0 };
   let isMinimized = false;
+  let isPreviewExpanded = false;
+  let isAnimating = false;
+  let dragStartPos = { x: 0, y: 0 };
+  let hasDragged = false;
+  let widgetFullHeight = 0;
+  let btnOffsetX = 30;
+  let btnOffsetY = 25;
   let settings = {
     defaultMinimized: true
   };
@@ -12,6 +19,7 @@
     widget.id = 'picture-collector';
     
     widget.innerHTML = `
+      <div id="minimized-icon">📷</div>
       <div id="picture-collector-header">
         <h3>📷 英雄到来模拟器</h3>
         <button class="btn-minimize" id="minimize-btn">−</button>
@@ -36,6 +44,10 @@
               <span class="toggle-slider"></span>
             </div>
           </label>
+        </div>
+        <div id="preview-mode-bar">
+          <button class="preview-mode-btn active" id="mode-collapsed-btn" title="折叠模式：仅显示来源">📝 折叠</button>
+          <button class="preview-mode-btn" id="mode-expanded-btn" title="展开模式：显示图片预览">🖼️ 展开</button>
         </div>
         <div id="image-preview"></div>
       </div>
@@ -74,10 +86,30 @@
 
     const defaultMinimizedToggle = document.getElementById('default-minimized-toggle');
     defaultMinimizedToggle.addEventListener('change', handleDefaultMinimizedChange);
+
+    const modeCollapsedBtn = document.getElementById('mode-collapsed-btn');
+    const modeExpandedBtn = document.getElementById('mode-expanded-btn');
+    modeCollapsedBtn.addEventListener('click', () => setPreviewMode(false));
+    modeExpandedBtn.addEventListener('click', () => setPreviewMode(true));
+
+    const minimizedIcon = document.getElementById('minimized-icon');
+    minimizedIcon.addEventListener('mousedown', (e) => {
+      if (!isMinimized) return;
+      e.preventDefault();
+      isDragging = true;
+      hasDragged = false;
+      dragStartPos.x = e.clientX;
+      dragStartPos.y = e.clientY;
+      const widget = document.getElementById('picture-collector');
+      const rect = widget.getBoundingClientRect();
+      dragOffset.x = e.clientX - rect.left;
+      dragOffset.y = e.clientY - rect.top;
+      widget.style.transition = 'none';
+    });
   }
 
   function startDrag(e) {
-    if (e.target.id === 'minimize-btn') return;
+    if (e.target.id === 'minimize-btn' || e.target.id === 'minimized-icon') return;
     
     isDragging = true;
     const widget = document.getElementById('picture-collector');
@@ -90,6 +122,12 @@
   function drag(e) {
     if (!isDragging) return;
     
+    const dx = e.clientX - dragStartPos.x;
+    const dy = e.clientY - dragStartPos.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      hasDragged = true;
+    }
+    
     const widget = document.getElementById('picture-collector');
     const x = e.clientX - dragOffset.x;
     const y = e.clientY - dragOffset.y;
@@ -100,9 +138,14 @@
   }
 
   function stopDrag() {
+    if (isDragging && isMinimized && !hasDragged && !isAnimating) {
+      isDragging = false;
+      toggleMinimize();
+      return;
+    }
     isDragging = false;
     const widget = document.getElementById('picture-collector');
-    widget.style.transition = 'box-shadow 0.3s ease';
+    widget.style.transition = '';
   }
 
   function handleDragOver(e) {
@@ -267,6 +310,7 @@
     if (images.length === 0) {
       previewContainer.innerHTML = '<div class="empty-message">暂无图片</div>';
     } else {
+      const bodyClass = isPreviewExpanded ? '' : 'collapsed';
       previewContainer.innerHTML = images.map((img, index) => `
         <div class="preview-item" data-index="${index}">
           <div class="preview-header">
@@ -276,7 +320,7 @@
               <button class="delete-btn" data-index="${index}" title="删除">×</button>
             </div>
           </div>
-          <div class="preview-body collapsed">
+          <div class="preview-body ${bodyClass}">
             <img src="${escapeHtml(img.dataUrl)}" alt="图片 ${index + 1}">
           </div>
         </div>
@@ -550,19 +594,180 @@
     showToast(`已清除 ${count} 张图片`, 'success');
   }
 
+  function setPreviewMode(expanded) {
+    isPreviewExpanded = expanded;
+    const modeCollapsedBtn = document.getElementById('mode-collapsed-btn');
+    const modeExpandedBtn = document.getElementById('mode-expanded-btn');
+    
+    if (expanded) {
+      modeExpandedBtn.classList.add('active');
+      modeCollapsedBtn.classList.remove('active');
+    } else {
+      modeCollapsedBtn.classList.add('active');
+      modeExpandedBtn.classList.remove('active');
+    }
+    
+    updateUI();
+  }
+
   function toggleMinimize() {
+    if (isAnimating) return;
+    if (isMinimized) {
+      expandWidget();
+    } else {
+      minimizeWidget();
+    }
+  }
+
+  function minimizeWidget() {
+    isAnimating = true;
     const widget = document.getElementById('picture-collector');
     const minimizeBtn = document.getElementById('minimize-btn');
-    
-    isMinimized = !isMinimized;
-    
-    if (isMinimized) {
-      widget.classList.add('minimized');
-      minimizeBtn.textContent = '+';
-    } else {
-      widget.classList.remove('minimized');
-      minimizeBtn.textContent = '−';
+    const body = document.getElementById('picture-collector-body');
+    const header = document.getElementById('picture-collector-header');
+    const icon = document.getElementById('minimized-icon');
+
+    const btnRect = minimizeBtn.getBoundingClientRect();
+    const widgetRect = widget.getBoundingClientRect();
+
+    const btnCenterX = btnRect.left + btnRect.width / 2;
+    const btnCenterY = btnRect.top + btnRect.height / 2;
+    btnOffsetX = widgetRect.width - (btnCenterX - widgetRect.left);
+    btnOffsetY = btnCenterY - widgetRect.top;
+    widgetFullHeight = widgetRect.height;
+
+    widget.style.right = 'auto';
+    widget.style.left = widgetRect.left + 'px';
+    widget.style.top = widgetRect.top + 'px';
+    widget.style.width = widgetRect.width + 'px';
+    widget.style.height = widgetRect.height + 'px';
+
+    body.style.transition = 'opacity 0.3s ease';
+    body.style.opacity = '0';
+
+    const ease = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    widget.style.transition = `height 0.5s ${ease}, border-radius 0.5s ${ease}`;
+
+    requestAnimationFrame(() => {
+      widget.style.height = '48px';
+      widget.style.borderRadius = '24px';
+
+      setTimeout(() => {
+        body.style.display = 'none';
+        body.style.transition = '';
+        body.style.opacity = '';
+
+        header.style.transition = 'opacity 0.15s ease';
+        header.style.opacity = '0';
+
+        const targetLeft = btnCenterX - 24;
+        const targetTop = btnCenterY - 24;
+
+        widget.style.transition = `width 0.3s ${ease}, border-radius 0.3s ${ease}, left 0.3s ${ease}, top 0.3s ${ease}`;
+
+        requestAnimationFrame(() => {
+          widget.style.width = '48px';
+          widget.style.borderRadius = '50%';
+          widget.style.left = targetLeft + 'px';
+          widget.style.top = targetTop + 'px';
+
+          setTimeout(() => {
+            header.style.display = 'none';
+            header.style.transition = '';
+            header.style.opacity = '';
+
+            icon.style.display = 'flex';
+            widget.style.transition = '';
+            widget.classList.add('minimized');
+
+            isMinimized = true;
+            isAnimating = false;
+          }, 320);
+        });
+      }, 520);
+    });
+  }
+
+  function expandWidget() {
+    isAnimating = true;
+    const widget = document.getElementById('picture-collector');
+    const body = document.getElementById('picture-collector-body');
+    const header = document.getElementById('picture-collector-header');
+    const icon = document.getElementById('minimized-icon');
+
+    const widgetRect = widget.getBoundingClientRect();
+    const circleCenterX = widgetRect.left + widgetRect.width / 2;
+    const circleCenterY = widgetRect.top + widgetRect.height / 2;
+
+    widget.classList.remove('minimized');
+    icon.style.display = 'none';
+
+    header.style.display = '';
+    header.style.opacity = '0';
+    body.style.display = '';
+    body.style.opacity = '0';
+
+    if (widgetFullHeight === 0) {
+      const savedW = widget.style.width;
+      const savedH = widget.style.height;
+      widget.style.width = '280px';
+      widget.style.height = '';
+      body.style.opacity = '';
+      header.style.opacity = '';
+      widgetFullHeight = widget.getBoundingClientRect().height;
+      widget.style.width = savedW;
+      widget.style.height = savedH;
+      body.style.opacity = '0';
+      header.style.opacity = '0';
     }
+
+    const targetLeftPhase1 = circleCenterX - 280 + btnOffsetX;
+    const targetTop = circleCenterY - btnOffsetY;
+
+    const ease = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    widget.style.transition = `width 0.3s ${ease}, border-radius 0.3s ${ease}, left 0.3s ${ease}, top 0.3s ${ease}`;
+
+    requestAnimationFrame(() => {
+      widget.style.width = '280px';
+      widget.style.borderRadius = '24px';
+      widget.style.left = targetLeftPhase1 + 'px';
+      widget.style.top = targetTop + 'px';
+
+      header.style.transition = 'opacity 0.2s ease';
+      header.style.opacity = '1';
+
+      setTimeout(() => {
+        header.style.transition = '';
+        header.style.opacity = '';
+
+        widget.style.transition = `height 0.5s ${ease}, border-radius 0.5s ${ease}`;
+
+        requestAnimationFrame(() => {
+          widget.style.height = widgetFullHeight + 'px';
+          widget.style.borderRadius = '12px';
+
+          setTimeout(() => {
+            body.style.transition = 'opacity 0.3s ease';
+            body.style.opacity = '1';
+          }, 200);
+
+          setTimeout(() => {
+            widget.style.transition = '';
+            widget.style.width = '';
+            widget.style.height = '';
+            widget.style.borderRadius = '';
+            widget.style.left = targetLeftPhase1 + 'px';
+            widget.style.top = targetTop + 'px';
+
+            body.style.transition = '';
+            body.style.opacity = '';
+
+            isMinimized = false;
+            isAnimating = false;
+          }, 520);
+        });
+      }, 320);
+    });
   }
 
   function handleDefaultMinimizedChange(e) {
@@ -601,19 +806,26 @@
 
   function applyDefaultMinimized() {
     const widget = document.getElementById('picture-collector');
-    const minimizeBtn = document.getElementById('minimize-btn');
     const defaultMinimizedToggle = document.getElementById('default-minimized-toggle');
 
     defaultMinimizedToggle.checked = settings.defaultMinimized;
 
     if (settings.defaultMinimized) {
       isMinimized = true;
+      const rect = widget.getBoundingClientRect();
+      widget.style.right = 'auto';
+      widget.style.left = (rect.right - 48) + 'px';
+      widget.style.top = rect.top + 'px';
+      widget.style.width = '48px';
+      widget.style.height = '48px';
+      widget.style.borderRadius = '50%';
       widget.classList.add('minimized');
-      minimizeBtn.textContent = '+';
+      document.getElementById('picture-collector-header').style.display = 'none';
+      document.getElementById('picture-collector-body').style.display = 'none';
+      document.getElementById('minimized-icon').style.display = 'flex';
     } else {
       isMinimized = false;
       widget.classList.remove('minimized');
-      minimizeBtn.textContent = '−';
     }
   }
 
